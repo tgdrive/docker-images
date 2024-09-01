@@ -1,0 +1,189 @@
+name: node
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+
+env:
+  DOCKER_CLI_EXPERIMENTAL: enabled
+  REPOSITORY: tgdrive/${{ github.workflow }} 
+
+permissions:
+  packages: write
+
+jobs:
+  fetch-versions:
+    runs-on: ubuntu-latest
+    outputs:
+      latest: ${{ steps.versions.outputs.latest }}
+      lts: ${{ steps.versions.outputs.lts }}
+    steps:
+    - name: Fetch Node.js versions
+      id: versions
+      run: |
+        LATEST=$(curl -s https://nodejs.org/dist/index.json | jq -r '[.[] | select(.lts == false)][0].version')
+        LTS=$(curl -s https://nodejs.org/dist/index.json | jq -r '[.[] | select(.lts != false)][0].version')
+        echo "latest=${LATEST#v}" >> $GITHUB_OUTPUT
+        echo "lts=${LTS#v}" >> $GITHUB_OUTPUT
+
+  check-existing-images:
+    needs: fetch-versions
+    runs-on: ubuntu-latest
+    outputs:
+      build_latest: ${{ steps.check.outputs.build_latest }}
+      build_lts: ${{ steps.check.outputs.build_lts }}
+    steps:
+    - name: Check existing images
+      id: check
+      run: |
+        LATEST_VERSION=${{ needs.fetch-versions.outputs.latest }}
+        LTS_VERSION=${{ needs.fetch-versions.outputs.lts }}
+        
+        check_image() {
+          REPO="ghcr.io/${{ env.REPOSITORY }}"
+          TAG="$1"
+          curl -s -f -L -I -o /dev/null -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://ghcr.io/v2/${REPO#ghcr.io/}/manifests/${TAG}" && echo "exists" || echo "not_exists"
+        }
+        
+        LATEST_EXISTS=$(check_image $LATEST_VERSION)
+        LTS_EXISTS=$(check_image $LTS_VERSION)
+        
+        echo "build_latest=$([[ $LATEST_EXISTS == "not_exists" ]] && echo "true" || echo "false")" >> $GITHUB_OUTPUT
+        echo "build_lts=$([[ $LTS_EXISTS == "not_exists" ]] && echo "true" || echo "false")" >> $GITHUB_OUTPUT
+
+  build-and-push:
+    needs: [fetch-versions, check-existing-images]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64]
+        version_type: [latest, lts]
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Prepare tags and cache keys
+      id: prep
+      run: |
+        if [[ "${{ matrix.version_type }}" == "latest" ]]; then
+          VERSION=${{ needs.fetch-versions.outputs.latest }}
+          BUILD_CONDITION=${{ needs.check-existing-images.outputs.build_latest }}
+        else
+          VERSION=${{ needs.fetch-versions.outputs.lts }}
+          BUILD_CONDITION=${{ needs.check-existing-images.outputs.build_lts }}
+        fi
+        
+        MAJOR_VERSION=$(echo $VERSION | cut -d. -f1)
+        TAGS="ghcr.io/${{ env.REPOSITORY }}:${VERSION}-${{ matrix.arch }}"
+        TAGS="${TAGS},ghcr.io/${{ env.REPOSITORY }}:${MAJOR_VERSION}-${{ matrix.arch }}"
+        
+        if [[ "${{ matrix.version_type }}" == "lts" ]]; then
+          TAGS="${TAGS},ghcr.io/${{ env.REPOSITORY }}:lts-${{ matrix.arch }}"
+        fi
+        
+        if [[ "${{ matrix.version_type }}" == "latest" ]]; then
+          TAGS="${TAGS},ghcr.io/${{ env.REPOSITORY }}:latest-${{ matrix.arch }}"
+        fi
+        
+        CACHE_FROM="type=gha,scope=${{ github.workflow }}-${{ matrix.version_type }}-${{ matrix.arch }}"
+        CACHE_TO="type=gha,scope=${{ github.workflow }}-${{ matrix.version_type }}-${{ matrix.arch }}"
+
+        echo "tags=${TAGS}" >> $GITHUB_OUTPUT
+        echo "version=${VERSION}" >> $GITHUB_OUTPUT
+        echo "major_version=${MAJOR_VERSION}" >> $GITHUB_OUTPUT
+        echo "build_condition=${BUILD_CONDITION}" >> $GITHUB_OUTPUT
+        echo "cache_from=${CACHE_FROM}" >> $GITHUB_OUTPUT
+        echo "cache_to=${CACHE_TO}" >> $GITHUB_OUTPUT
+    
+    - name: Set Docker metadata
+      id: docker_meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REPOSITORY }}
+        labels: |
+          org.opencontainers.image.version=${{ steps.prep.outputs.version }}
+          org.opencontainers.image.revision=${{ github.sha }}
+          org.opencontainers.image.title=${{ env.REPOSITORY }}
+          org.opencontainers.image.description="Node.js Distroless image"
+
+    - name: Build and push image
+      uses: docker/build-push-action@v6
+      if: steps.prep.outputs.build_condition == 'true'
+      with:
+        context: ./node
+        push: true
+        provenance: false
+        labels: ${{ steps.docker_meta.outputs.labels }}
+        build-args: |
+          version=${{ steps.prep.outputs.version }}
+          arch=${{ matrix.arch == 'arm64' && 'arm64v8' || matrix.arch }}
+        cache-from: ${{ steps.prep.outputs.cache_from }}
+        cache-to: ${{ steps.prep.outputs.cache_to }}
+        tags: ${{ steps.prep.outputs.tags }}
+
+
+  create-and-push-manifest:
+    needs: [fetch-versions, check-existing-images, build-and-push]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        version_type: [latest, lts]
+    steps:
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Create and push manifests
+      run: |
+        if [[ "${{ matrix.version_type }}" == "latest" ]]; then
+          VERSION=${{ needs.fetch-versions.outputs.latest }}
+          BUILD_CONDITION=${{ needs.check-existing-images.outputs.build_latest }}
+        else
+          VERSION=${{ needs.fetch-versions.outputs.lts }}
+          BUILD_CONDITION=${{ needs.check-existing-images.outputs.build_lts }}
+        fi
+        
+        if [[ "${BUILD_CONDITION}" != "true" ]]; then
+          echo "Skipping manifest creation for ${{ matrix.version_type }} as it was not built"
+          exit 0
+        fi
+        
+        MAJOR_VERSION=$(echo $VERSION | cut -d. -f1)
+        
+        create_and_push_manifest() {
+          local TAG=$1
+          docker manifest create --amend ghcr.io/${{ env.REPOSITORY }}:${TAG} \
+          ghcr.io/${{ env.REPOSITORY }}:${VERSION}-amd64
+
+          docker manifest annotate --os linux --arch amd64 ghcr.io/${{ env.REPOSITORY }}:${TAG} ghcr.io/${{ env.REPOSITORY }}:${VERSION}-amd64
+          #docker manifest annotate --os linux --arch arm64 ghcr.io/${{ env.REPOSITORY }}:${TAG} ghcr.io/${{ env.REPOSITORY }}:${VERSION}-arm64
+          docker manifest push --purge ghcr.io/${{ env.REPOSITORY }}:${TAG}
+        }
+        
+        create_and_push_manifest ${VERSION}
+        
+        create_and_push_manifest ${MAJOR_VERSION}
+        
+        if [[ "${{ matrix.version_type }}" == "latest" ]]; then
+          create_and_push_manifest latest
+        else
+          create_and_push_manifest lts
+        fi

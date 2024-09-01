@@ -1,7 +1,6 @@
 #!/bin/bash
 
 set -eux
-
 MECAB_VERSION=0.996
 
 mkdir build
