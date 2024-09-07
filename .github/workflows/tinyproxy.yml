@@ -7,7 +7,7 @@ env:
   IMAGE: tgdrive/${{ github.workflow }} 
   
 jobs:
-  build-postgres:
+  build:
     runs-on: ubuntu-latest
     permissions:
       packages: write
