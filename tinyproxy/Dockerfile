@@ -10,7 +10,7 @@ WORKDIR /tinyproxy
 RUN ./autogen.sh && \
     ./configure --sysconfdir=/etc --enable-transparent --enable-upstream \
     --enable-reverse --enable-filter --enable-silent-rules LDFLAGS="-static" && make
-RUN printf 'Port 3128\nTimeout 600\nAllow ::1' > tinyproxy.conf
+RUN printf 'Port 3128' > tinyproxy.conf
 
 FROM scratch
 COPY --from=build /tinyproxy/src/tinyproxy /tinyproxy
