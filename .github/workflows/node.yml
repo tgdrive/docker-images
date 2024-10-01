@@ -6,7 +6,6 @@ on:
   workflow_dispatch:
 
 env:
-  DOCKER_CLI_EXPERIMENTAL: enabled
   REPOSITORY: tgdrive/${{ github.workflow }} 
 
 permissions:

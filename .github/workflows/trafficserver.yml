@@ -1,13 +1,10 @@
-name: postgres
+name: trafficserver
 
 on:
-  schedule:
-    - cron: '0 0 1 * *'
-
   workflow_dispatch:
 
 env:
-  BUILD_VERSION: "16-alpine"
+  BUILD_VERSION: "10.0.0"
   REPOSITORY: tgdrive/${{ github.workflow }} 
   
 jobs:
@@ -47,14 +44,12 @@ jobs:
       - name: Build Image
         uses: docker/build-push-action@v6
         with:
-          context: ./postgres
+          context: ./trafficserver
           push: true
-          platforms: linux/amd64,linux/arm64
+          # platforms: linux/amd64,linux/arm64
           build-args: |
             BUILD_VERSION
           labels: ${{ steps.docker_meta.outputs.labels }}
-          sbom: true
-          provenance: true
           cache-from: type=gha, scope=${{ github.workflow }}
           cache-to: type=gha, scope=${{ github.workflow }}
           tags: |
