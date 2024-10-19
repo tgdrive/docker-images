@@ -1,13 +1,10 @@
 name: postgres
 
 on:
-  schedule:
-    - cron: '0 0 1 * *'
-
   workflow_dispatch:
 
 env:
-  BUILD_VERSION: "16-alpine"
+  BUILD_VERSION: "17-alpine"
   REPOSITORY: tgdrive/${{ github.workflow }} 
   
 jobs:
@@ -59,4 +56,3 @@ jobs:
           cache-to: type=gha, scope=${{ github.workflow }}
           tags: |
             ghcr.io/${{ env.REPOSITORY }}:${{ env.BUILD_VERSION }}
-            ghcr.io/${{ env.REPOSITORY }}:latest
