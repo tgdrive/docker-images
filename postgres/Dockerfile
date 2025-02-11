@@ -32,7 +32,7 @@ rm -rf /var/lib/apt/lists/*
 EOR
 
 CMD ["postgres", \
-     "-c", "cron.database_name=${POSTGRES_DB:-postgres}", \
+     "-c", "cron.database_name=postgres", \
      "-c", "shared_preload_libraries=pg_cron,vectors", \
      "-c", "search_path=\"$user\",public,vectors", \
      "-c", "logging_collector=on"]
