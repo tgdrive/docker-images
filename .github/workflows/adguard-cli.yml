@@ -23,6 +23,6 @@ jobs:
       - name: Build Image
         uses: docker/build-push-action@v3
         with:
-          context: ./
+          context: ./adguard-cli
           push: true
           tags: ghcr.io/${{ github.repository }}:latest
