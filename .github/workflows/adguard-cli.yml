@@ -25,4 +25,4 @@ jobs:
         with:
           context: ./adguard-cli
           push: true
-          tags: ghcr.io/${{ github.repository }}:latest
+          tags: ghcr.io/tgdrive/adguard-cli:latest
