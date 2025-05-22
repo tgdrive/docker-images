@@ -1,9 +1,6 @@
 name: aria2c
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 jobs:
