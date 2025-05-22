@@ -30,4 +30,4 @@ jobs:
           context: ./aria2c
           push: true
           platforms: linux/amd64,linux/arm64
-          tags: ghcr.io/tgdrive/caddy:latest
+          tags: ghcr.io/tgdrive/aria2c:latest
