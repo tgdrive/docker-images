@@ -28,7 +28,7 @@ jobs:
           
           ENCODED_TOKEN=$(echo -n "${{ secrets.GITHUB_TOKEN }}" | base64)
 
-          TAGS=$(curl -s -H "Authorization: Bearer ${ENCODED_TOKEN}" https://ghcr.io/v2/${{ env.IMAGE_NAME}}/tags/list)
+          TAGS=$(curl -s -H "Authorization: Bearer ${ENCODED_TOKEN}" https://ghcr.io/v2/${{ env.IMAGE_NAME }}/tags/list)
 
           EXISTS=$(echo "$TAGS" | jq --arg TAG "$VERSION" '
             .tags |                                      
@@ -63,9 +63,9 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ghcr.io/${{ env.IMAGE_NAME}}:latest
-            ghcr.io/${{ env.IMAGE_NAME}}:${{ steps.version.outputs.version }}
+            ghcr.io/${{ env.IMAGE_NAME }}:latest
+            ghcr.io/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
           labels: |
             org.opencontainers.image.version=${{ steps.version.outputs.version }}
-            org.opencontainers.image.title=${{ env.IMAGE_NAME}}
+            org.opencontainers.image.title=${{ env.IMAGE_NAME }}
             org.opencontainers.image.description=Caddy Extended Image
