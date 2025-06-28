@@ -3,7 +3,7 @@ name: adguard-cli
 on:
   workflow_dispatch:
   schedule:
-    - cron: '15 3 * * 1'
+    - cron: '0 0 * * 1'
   
 jobs:
    build_image:
