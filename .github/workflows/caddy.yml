@@ -11,7 +11,9 @@ on:
   schedule:
     - cron: '0 0 * * 1'
 
-
+permissions:
+  contents: write
+  
 env:
   IMAGE_NAME: tgdrive/caddy
 
