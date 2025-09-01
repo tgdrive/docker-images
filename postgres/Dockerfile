@@ -6,7 +6,7 @@ FROM groonga/pgroonga:latest-debian-${PG_MAJOR}
 RUN <<EOR
 apt-get update
 apt-mark hold locales
-apt-get install -y --no-install-recommends build-essential postgresql-server-dev-${PG_MAJOR} git ca-certificates
+apt-get install -y --no-install-recommends build-essential postgresql-server-dev-${PG_MAJOR} git ca-certificates curl 
 mkdir -p build
 cd build 
 git clone https://github.com/pgvector/pgvector.git
@@ -21,7 +21,7 @@ rm -rf build
 curl -sL -o /tmp/vchord.deb https://github.com/tensorchord/VectorChord/releases/download/${VCHORD_TAG}/postgresql-${PG_MAJOR}-vchord_${VCHORD}-1_$(dpkg --print-architecture).deb
 apt-get install -y /tmp/vchord.deb
 rm -f /tmp/vchord.deb
-apt-get remove -y build-essential postgresql-server-dev-${PG_MAJOR} git
+apt-get remove -y build-essential postgresql-server-dev-${PG_MAJOR} git curl
 apt-get autoremove -y 
 apt-mark unhold locales
 rm -rf /var/lib/apt/lists/*
