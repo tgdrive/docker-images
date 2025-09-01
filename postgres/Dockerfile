@@ -18,7 +18,7 @@ cd pg_cron
 make && make install
 cd ..
 rm -rf build
-curl -sL -o /tmp/vchord.deb https://github.com/tensorchord/VectorChord/releases/download/${VCHORD_TAG}/postgresql-${PG_MAJOR}-vchord_${VCHORD}-1_$(dpkg --print-architecture).deb
+curl -sL -o /tmp/vchord.deb https://github.com/tensorchord/VectorChord/releases/download/${VCHORD_TAG}/postgresql-${PG_MAJOR}-vchord_${VCHORD_TAG}-1_$(dpkg --print-architecture).deb
 apt-get install -y /tmp/vchord.deb
 rm -f /tmp/vchord.deb
 apt-get remove -y build-essential postgresql-server-dev-${PG_MAJOR} git curl
