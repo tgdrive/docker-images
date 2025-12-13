@@ -64,7 +64,7 @@ jobs:
 
       - name: Create and Push Manifest List
         env:
-          REPO:ghcr.io/tgdrive/adguard-cli
+          REPO: ghcr.io/tgdrive/adguard-cli
         run: |
           IMG_AMD64="${REPO}:amd64"
           IMG_ARM64="${REPO}:arm64"
