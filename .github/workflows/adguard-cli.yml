@@ -43,7 +43,7 @@ jobs:
       - name: Build and Push Architecture-Specific Image
         uses: docker/build-push-action@v5
         with:
-          context: ./
+          context: ./adguard-cli
           platforms: ${{ matrix.platform }}
           push: true
           provenance: false
