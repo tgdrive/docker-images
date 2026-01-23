@@ -5,7 +5,7 @@ on:
   schedule:
     - cron: '0 0 1 * *'
 env:
-  PG_MAJOR: "17"
+  PG_MAJOR: "18"
   REPOSITORY: tgdrive/${{ github.workflow }} 
   
 jobs:
