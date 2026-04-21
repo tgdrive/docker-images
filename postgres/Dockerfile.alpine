@@ -39,8 +39,15 @@ RUN set -eux; \
     cd /tmp/build; \
     curl -fsSL "https://github.com/tensorchord/VectorChord/archive/refs/tags/${VCHORD_TAG}.tar.gz" | tar -xz; \
     cd "/tmp/build/VectorChord-${VCHORD_TAG}"; \
-    make build; \
-    make install; \
+    mkdir -p .cargo; \
+    printf '%s\n' \
+      'unstable.host-config = true' \
+      'unstable.target-applies-to-host = true' \
+      'host.rustflags = ["-Ctarget-feature=-crt-static"]' \
+      'build.rustflags = ["-Ctarget-feature=-crt-static"]' \
+      > .cargo/config.toml; \
+    RUSTC_BOOTSTRAP=1 make build; \
+    RUSTC_BOOTSTRAP=1 make install; \
     rm -rf /tmp/build; \
     apk del .build-deps; \
     apk add --no-cache libgcc libstdc++
