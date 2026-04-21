@@ -2,28 +2,149 @@ name: postgres
 
 on:
   workflow_dispatch:
+    inputs:
+      force:
+        description: 'Force build even if version exists'
+        required: false
+        type: boolean
+        default: false
   schedule:
     - cron: '0 0 1 * *'
+
+permissions:
+  contents: read
+  packages: write
+
 env:
   PG_MAJOR: "18"
-  REPOSITORY: tgdrive/${{ github.workflow }} 
-  
+  REPOSITORY: tgdrive/${{ github.workflow }}
+
 jobs:
-  build:
+  check-version:
     runs-on: ubuntu-latest
-    permissions:
-      packages: write
+    outputs:
+      build: ${{ steps.check.outputs.build }}
+      pgvector_tag: ${{ steps.check.outputs.pgvector_tag }}
+      pg_cron_tag: ${{ steps.check.outputs.pg_cron_tag }}
+      vchord_tag: ${{ steps.check.outputs.vchord_tag }}
+      pgroonga_debian_version: ${{ steps.check.outputs.pgroonga_debian_version }}
+      pgroonga_alpine_version: ${{ steps.check.outputs.pgroonga_alpine_version }}
+    steps:
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve versions and decide rebuild
+        id: check
+        env:
+          FORCE_BUILD: ${{ inputs.force }}
+        run: |
+          set -euo pipefail
+
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+          PGVECTOR_TAG=$(git ls-remote --tags --refs https://github.com/pgvector/pgvector.git "v*" | awk -F/ '{print $3}' | sort -V | tail -n1)
+          PG_CRON_TAG=$(curl -fsSL "https://api.github.com/repos/citusdata/pg_cron/releases/latest" | jq -r '.tag_name')
+          VCHORD_TAG=$(curl -fsSL "https://api.github.com/repos/tensorchord/VectorChord/releases/latest" | jq -r '.tag_name')
+
+          TAGS_JSON=$(curl -fsSL "https://hub.docker.com/v2/repositories/groonga/pgroonga/tags?page_size=200")
+          PGROONGA_DEBIAN_VERSION=$(echo "${TAGS_JSON}" | jq -r '.results[].name' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+-debian-${{ env.PG_MAJOR }}$' | sed 's/-debian-.*$//' | sort -V | tail -n1)
+          PGROONGA_ALPINE_VERSION=$(echo "${TAGS_JSON}" | jq -r '.results[].name' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+-alpine-${{ env.PG_MAJOR }}$' | sed 's/-alpine-.*$//' | sort -V | tail -n1)
+
+          IMAGE="ghcr.io/${{ env.REPOSITORY }}"
+
+          labels_match() {
+            local tag="$1"
+            local expected_pgroonga="$2"
+
+            if ! docker pull --platform linux/amd64 "${IMAGE}:${tag}" >/dev/null 2>&1; then
+              return 1
+            fi
+
+            local got_pgvector
+            local got_pgcron
+            local got_vchord
+            local got_pgroonga
+
+            got_pgvector=$(docker image inspect "${IMAGE}:${tag}" --format '{{ index .Config.Labels "org.postgres.pgvector" }}' 2>/dev/null || true)
+            got_pgcron=$(docker image inspect "${IMAGE}:${tag}" --format '{{ index .Config.Labels "org.postgres.pgcron" }}' 2>/dev/null || true)
+            got_vchord=$(docker image inspect "${IMAGE}:${tag}" --format '{{ index .Config.Labels "org.postgres.vchord" }}' 2>/dev/null || true)
+            got_pgroonga=$(docker image inspect "${IMAGE}:${tag}" --format '{{ index .Config.Labels "org.postgres.pgroonga" }}' 2>/dev/null || true)
+
+            [ "${got_pgvector}" = "${PGVECTOR_TAG}" ] && \
+            [ "${got_pgcron}" = "${PG_CRON_TAG}" ] && \
+            [ "${got_vchord}" = "${VCHORD_TAG}" ] && \
+            [ "${got_pgroonga}" = "${expected_pgroonga}" ]
+          }
+
+          DEBIAN_MATCH=false
+          ALPINE_MATCH=false
+
+          if labels_match "${{ env.PG_MAJOR }}" "${PGROONGA_DEBIAN_VERSION}"; then
+            DEBIAN_MATCH=true
+          fi
+
+          if labels_match "${{ env.PG_MAJOR }}-alpine" "${PGROONGA_ALPINE_VERSION}"; then
+            ALPINE_MATCH=true
+          fi
+
+          if [ "${FORCE_BUILD}" = "true" ]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          elif [ "${DEBIAN_MATCH}" = "true" ] && [ "${ALPINE_MATCH}" = "true" ]; then
+            echo "Existing labels already match dependencies, skipping build"
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "pgvector_tag=${PGVECTOR_TAG}" >> "$GITHUB_OUTPUT"
+          echo "pg_cron_tag=${PG_CRON_TAG}" >> "$GITHUB_OUTPUT"
+          echo "vchord_tag=${VCHORD_TAG}" >> "$GITHUB_OUTPUT"
+          echo "pgroonga_debian_version=${PGROONGA_DEBIAN_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "pgroonga_alpine_version=${PGROONGA_ALPINE_VERSION}" >> "$GITHUB_OUTPUT"
+
+  build-layers:
+    needs: check-version
+    if: needs.check-version.outputs.build == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - distro: debian
+            runner: ubuntu-latest
+            platform: linux/amd64
+            arch: amd64
+            dockerfile: ./postgres/Dockerfile
+            stable_tag: "18"
+          - distro: debian
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+            arch: arm64
+            dockerfile: ./postgres/Dockerfile
+            stable_tag: "18"
+          - distro: alpine
+            runner: ubuntu-latest
+            platform: linux/amd64
+            arch: amd64
+            dockerfile: ./postgres/Dockerfile.alpine
+            stable_tag: "18-alpine"
+          - distro: alpine
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+            arch: arm64
+            dockerfile: ./postgres/Dockerfile.alpine
+            stable_tag: "18-alpine"
+    runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-        
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
@@ -32,41 +153,71 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set Docker metadata
-        id: docker_meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REPOSITORY }}
-          labels: |
-            org.opencontainers.image.version=${{ env.PG_MAJOR}}
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.title=${{ env.REPOSITORY }}
-      - name: VectorChord Version
-        id: vectorchord
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set distro-specific metadata
         run: |
-          sudo apt update && sudo apt install -y curl jq
-          LATEST_TAG=$(curl -sL \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            "https://api.github.com/repos/tensorchord/VectorChord/releases/latest" | \
-            jq -r .tag_name)
-          echo "latest_tag=${LATEST_TAG}" >> $GITHUB_OUTPUT
-      
-      - name: Build Image
+          set -euo pipefail
+          if [ "${{ matrix.distro }}" = "debian" ]; then
+            echo "PGROONGA_VERSION=${{ needs.check-version.outputs.pgroonga_debian_version }}" >> "$GITHUB_ENV"
+            echo "PGROONGA_BASE=groonga/pgroonga:${{ needs.check-version.outputs.pgroonga_debian_version }}-debian-${{ env.PG_MAJOR }}" >> "$GITHUB_ENV"
+          else
+            echo "PGROONGA_VERSION=${{ needs.check-version.outputs.pgroonga_alpine_version }}" >> "$GITHUB_ENV"
+            echo "PGROONGA_BASE=groonga/pgroonga:${{ needs.check-version.outputs.pgroonga_alpine_version }}-alpine-${{ env.PG_MAJOR }}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build and Push Image
         uses: docker/build-push-action@v6
         with:
           context: ./postgres
+          file: ${{ matrix.dockerfile }}
+          platforms: ${{ matrix.platform }}
           push: true
-          platforms: linux/amd64,linux/arm64
           build-args: |
-            PG_MAJOR
-            VCHORD_TAG=${{ steps.vectorchord.outputs.latest_tag }}
-          labels: ${{ steps.docker_meta.outputs.labels }}
+            PG_MAJOR=${{ env.PG_MAJOR }}
+            PGROONGA_VERSION=${{ env.PGROONGA_VERSION }}
+            PGVECTOR_TAG=${{ needs.check-version.outputs.pgvector_tag }}
+            PG_CRON_TAG=${{ needs.check-version.outputs.pg_cron_tag }}
+            VCHORD_TAG=${{ needs.check-version.outputs.vchord_tag }}
+          labels: |
+            org.opencontainers.image.version=${{ env.PG_MAJOR }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.title=${{ env.REPOSITORY }}
+            org.opencontainers.image.base.name=${{ env.PGROONGA_BASE }}
+            org.postgres.pgvector=${{ needs.check-version.outputs.pgvector_tag }}
+            org.postgres.pgcron=${{ needs.check-version.outputs.pg_cron_tag }}
+            org.postgres.vchord=${{ needs.check-version.outputs.vchord_tag }}
+            org.postgres.pgroonga=${{ env.PGROONGA_VERSION }}
+          cache-from: type=gha,scope=${{ github.workflow }}-${{ matrix.distro }}-${{ matrix.arch }}
+          cache-to: type=gha,scope=${{ github.workflow }}-${{ matrix.distro }}-${{ matrix.arch }}
           sbom: true
           provenance: true
-          cache-from: type=gha, scope=${{ github.workflow }}
-          cache-to: type=gha, scope=${{ github.workflow }}
           tags: |
-            ghcr.io/${{ env.REPOSITORY }}:${{ env.PG_MAJOR }}
+            ghcr.io/${{ env.REPOSITORY }}:${{ matrix.stable_tag }}-${{ matrix.arch }}
+
+  merge-manifests:
+    needs: [check-version, build-layers]
+    if: needs.check-version.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - stable_tag: "18"
+          - stable_tag: "18-alpine"
+    steps:
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create and Push Manifest List
+        run: |
+          set -euo pipefail
+          IMAGE="ghcr.io/${{ env.REPOSITORY }}"
+          STABLE="${{ matrix.stable_tag }}"
+
+          docker buildx imagetools create \
+            -t "${IMAGE}:${STABLE}" \
+            "${IMAGE}:${STABLE}-amd64" \
+            "${IMAGE}:${STABLE}-arm64"

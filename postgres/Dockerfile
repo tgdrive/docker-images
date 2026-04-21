@@ -1,9 +1,15 @@
-ARG PG_MAJOR=17
-ARG VCHORD_TAG=0.5.0
+ARG PG_MAJOR=18
+ARG PGROONGA_VERSION=4.0.6
+ARG PGVECTOR_TAG=v0.8.1
+ARG PG_CRON_TAG=v1.6.7
+ARG VCHORD_TAG=1.1.1
 
-FROM groonga/pgroonga:latest-debian-${PG_MAJOR}
+FROM groonga/pgroonga:${PGROONGA_VERSION}-debian-${PG_MAJOR}
 
 ARG PG_MAJOR
+ARG PGROONGA_VERSION
+ARG PGVECTOR_TAG
+ARG PG_CRON_TAG
 ARG VCHORD_TAG
 
 RUN <<EOR
@@ -12,11 +18,11 @@ apt-mark hold locales
 apt-get install -y --no-install-recommends build-essential postgresql-server-dev-${PG_MAJOR} git ca-certificates curl 
 mkdir -p build
 cd build 
-git clone https://github.com/pgvector/pgvector.git
+git clone --depth 1 --branch ${PGVECTOR_TAG} https://github.com/pgvector/pgvector.git
 cd pgvector
 make OPTFLAGS="" && make install
 cd ..
-git clone https://github.com/citusdata/pg_cron.git
+git clone --depth 1 --branch ${PG_CRON_TAG} https://github.com/citusdata/pg_cron.git
 cd pg_cron
 make && make install
 cd ..

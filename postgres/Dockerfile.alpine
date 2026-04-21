@@ -1,0 +1,51 @@
+ARG PG_MAJOR=18
+ARG PGROONGA_VERSION=4.0.6
+ARG PGVECTOR_TAG=v0.8.1
+ARG PG_CRON_TAG=v1.6.7
+ARG VCHORD_TAG=1.1.1
+
+FROM groonga/pgroonga:${PGROONGA_VERSION}-alpine-${PG_MAJOR}
+
+ARG PGROONGA_VERSION
+ARG PGVECTOR_TAG
+ARG PG_CRON_TAG
+ARG VCHORD_TAG
+
+RUN set -eux; \
+    echo "https://dl-cdn.alpinelinux.org/alpine/edge/main" >> /etc/apk/repositories; \
+    echo "https://dl-cdn.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories; \
+    apk add --no-cache --virtual .build-deps \
+      bash \
+      build-base \
+      clang19 \
+      clang19-dev \
+      curl \
+      git \
+      llvm19 \
+      make \
+      cargo \
+      rust \
+      rustfmt; \
+    mkdir -p /tmp/build; \
+    cd /tmp/build; \
+    git clone --depth 1 --branch "${PGVECTOR_TAG}" https://github.com/pgvector/pgvector.git; \
+    cd /tmp/build/pgvector; \
+    make OPTFLAGS=""; \
+    make install; \
+    git clone --depth 1 --branch "${PG_CRON_TAG}" https://github.com/citusdata/pg_cron.git /tmp/build/pg_cron; \
+    cd /tmp/build/pg_cron; \
+    make; \
+    make install; \
+    cd /tmp/build; \
+    curl -fsSL "https://github.com/tensorchord/VectorChord/archive/refs/tags/${VCHORD_TAG}.tar.gz" | tar -xz; \
+    cd "/tmp/build/VectorChord-${VCHORD_TAG}"; \
+    make build; \
+    make install; \
+    rm -rf /tmp/build; \
+    apk del .build-deps; \
+    apk add --no-cache libgcc libstdc++
+
+CMD ["postgres", \
+     "-c", "cron.database_name=postgres", \
+     "-c", "shared_preload_libraries=pg_cron,vchord.so", \
+     "-c", "logging_collector=on"]
