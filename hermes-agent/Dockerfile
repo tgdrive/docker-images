@@ -128,6 +128,7 @@ RUN apk add --no-cache \
     ca-certificates \
     libstdc++ \
     coreutils \
+    sed \
     docker-cli \
     ffmpeg \
     git \
