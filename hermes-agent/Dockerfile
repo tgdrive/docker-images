@@ -127,6 +127,7 @@ RUN apk add --no-cache \
     bash \
     ca-certificates \
     libstdc++ \
+    coreutils \
     docker-cli \
     ffmpeg \
     git \
