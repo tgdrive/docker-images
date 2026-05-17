@@ -1,4 +1,4 @@
-FROM lexiforest/curl-impersonate:alpine AS curl-impersonate
+FROM ghcr.io/tgdrive/curl-impersonate:latest AS curl-impersonate
 
 FROM alpine:latest AS builder
 

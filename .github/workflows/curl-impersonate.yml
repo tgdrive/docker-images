@@ -1,0 +1,139 @@
+name: curl-impersonate
+
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Force build even if version exists'
+        required: false
+        type: boolean
+        default: false
+  schedule:
+    - cron: '0 0 * * 1'
+
+permissions:
+  packages: write
+  contents: read
+
+env:
+  IMAGE_NAME: tgdrive/curl-impersonate
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.version.outputs.build }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check upstream version and image tag
+        id: version
+        run: |
+          set -euo pipefail
+
+          VERSION=$(curl -fsSL \
+            "https://api.github.com/repos/lexiforest/curl-impersonate/commits/main" \
+            | jq -r '.sha')
+
+          if [ -z "${VERSION}" ] || [ "${VERSION}" = "null" ]; then
+            echo "Failed to resolve curl-impersonate latest commit"
+            exit 1
+          fi
+
+          SHORT_VERSION="${VERSION:0:7}"
+
+          if docker manifest inspect "ghcr.io/${{ env.IMAGE_NAME }}:${SHORT_VERSION}" >/dev/null 2>&1; then
+            EXISTS=true
+          else
+            EXISTS=false
+          fi
+
+          if [ "$EXISTS" = "false" ] || [ "${{ inputs.force }}" = "true" ]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "Version ${SHORT_VERSION} already exists, skipping build"
+          fi
+
+          echo "version=${SHORT_VERSION}" >> "$GITHUB_OUTPUT"
+
+  build_per_arch:
+    name: Build for ${{ matrix.platform }}
+    needs: check-version
+    if: needs.check-version.outputs.build == 'true'
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - platform: linux/amd64
+            arch: amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Push Architecture-Specific Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./curl-impersonate
+          platforms: ${{ matrix.platform }}
+          push: true
+          provenance: false
+          sbom: false
+          tags: ghcr.io/${{ env.IMAGE_NAME }}:${{ needs.check-version.outputs.version }}-${{ matrix.arch }}
+
+  create_manifest:
+    name: Create and Push Docker Manifest
+    runs-on: ubuntu-latest
+    needs: [check-version, build_per_arch]
+    if: needs.check-version.outputs.build == 'true'
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create and Push Manifest List
+        env:
+          REPO: ghcr.io/${{ env.IMAGE_NAME }}
+          VERSION: ${{ needs.check-version.outputs.version }}
+        run: |
+          IMG_AMD64="${REPO}:${VERSION}-amd64"
+          IMG_ARM64="${REPO}:${VERSION}-arm64"
+
+          echo "Creating manifest for ${REPO}:${VERSION}"
+          docker buildx imagetools create \
+            -t "${REPO}:${VERSION}" \
+            "${IMG_AMD64}" \
+            "${IMG_ARM64}"
+
+          echo "Creating manifest for ${REPO}:latest"
+          docker buildx imagetools create \
+            -t "${REPO}:latest" \
+            "${IMG_AMD64}" \
+            "${IMG_ARM64}"
