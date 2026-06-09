@@ -7,7 +7,7 @@ on:
         required: true
         type: string
       build-context:
-        required: true
+        required: false
         type: string
       upstream-repo:
         required: true
