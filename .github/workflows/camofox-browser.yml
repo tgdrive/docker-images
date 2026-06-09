@@ -1,0 +1,22 @@
+name: camofox-browser
+
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Force build even if version exists'
+        required: false
+        type: boolean
+        default: false
+  schedule:
+    - cron: '0 0 * * 1'
+
+jobs:
+  build:
+    uses: ./.github/workflows/_docker-build.yml
+    with:
+      image-name: tgdrive/camofox-browser
+      upstream-repo: redf0x1/camofox-browser
+      upstream-source-repo: redf0x1/camofox-browser
+      force: ${{ github.event_name == 'workflow_dispatch' && inputs.force || false }}
+    secrets: inherit
