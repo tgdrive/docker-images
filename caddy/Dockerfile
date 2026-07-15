@@ -82,7 +82,8 @@ RUN printf '#!/bin/sh\nexec pkg-config --static "$@"\n' > /usr/local/bin/pkg-con
       --with github.com/caddy-dns/cloudflare \
       --with github.com/tailscale/caddy-tailscale \
       --with github.com/mholt/caddy-l4 \
-      --with github.com/tgdrive/varc
+      --with github.com/tgdrive/varc \
+      --with github.com/tgdrive/caddy-vips
 
 FROM docker.io/library/caddy:alpine
 
