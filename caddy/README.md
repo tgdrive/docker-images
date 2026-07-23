@@ -14,7 +14,7 @@
 
 - [varc](https://github.com/tgdrive/varc), built with its optional libvips image transformation support
 
-The image is built directly from static libvips and its required native dependencies in an isolated builder stage. The final Caddy binary is linked fully statically. Override the source versions when needed:
+The image is built directly from static libvips and its required native dependencies in an isolated builder stage. Jemalloc is linked statically and used by libvips and other native CGO code to reduce memory fragmentation; Go's own heap continues to use the Go runtime allocator. The final Caddy binary is fully static, so no jemalloc runtime package is needed. Override the source versions when needed:
 
 ```sh
 docker build \

@@ -6,6 +6,7 @@ ARG TIFF_VERSION=4.7.2
 
 RUN apk add --no-cache \
     build-base curl xz meson ninja cmake pkgconf file \
+    jemalloc-dev jemalloc-static \
     glib-dev glib-static libffi-dev \
     pcre2-dev pcre2-static gettext-dev gettext-static \
     expat-dev expat-static util-linux-static zlib-static \
@@ -70,6 +71,8 @@ ARG CADDY_VERSION=latest
 ENV PKG_CONFIG_PATH=/opt/vips/lib/pkgconfig:/opt/deps/lib/pkgconfig:/opt/deps/lib64/pkgconfig:/usr/lib/pkgconfig
 ENV PKG_CONFIG=/usr/local/bin/pkg-config-static
 ENV CGO_ENABLED=1
+ENV CGO_CFLAGS="-fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free"
+ENV CGO_LDFLAGS="-ljemalloc"
 
 RUN printf '#!/bin/sh\nexec pkg-config --static "$@"\n' > /usr/local/bin/pkg-config-static \
  && chmod +x /usr/local/bin/pkg-config-static \
