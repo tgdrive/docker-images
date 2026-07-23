@@ -72,13 +72,12 @@ ENV PKG_CONFIG_PATH=/opt/vips/lib/pkgconfig:/opt/deps/lib/pkgconfig:/opt/deps/li
 ENV PKG_CONFIG=/usr/local/bin/pkg-config-static
 ENV CGO_ENABLED=1
 ENV CGO_CFLAGS="-fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free"
-ENV CGO_LDFLAGS="-ljemalloc"
 
 RUN printf '#!/bin/sh\nexec pkg-config --static "$@"\n' > /usr/local/bin/pkg-config-static \
  && chmod +x /usr/local/bin/pkg-config-static \
  && apk add --no-cache git \
  && go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest \
- && XCADDY_GO_BUILD_FLAGS="-trimpath -tags 'nobadger,nomysql,nopgx,vips' -ldflags '-w -s -linkmode external -extldflags \"-static -leconf\"'" \
+ && XCADDY_GO_BUILD_FLAGS="-trimpath -tags 'nobadger,nomysql,nopgx,vips' -ldflags '-w -s -linkmode external -extldflags \"-static -ljemalloc -leconf\"'" \
     xcaddy build "${CADDY_VERSION}" --output /usr/bin/caddy \
       --with github.com/caddyserver/forwardproxy \
       --with github.com/mholt/caddy-webdav \
