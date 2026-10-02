@@ -6,8 +6,10 @@ WORKDIR /source/console
 RUN corepack enable
 COPY console/package.json console/pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
-COPY console/ ./
-RUN pnpm build
+WORKDIR /source
+COPY . .
+WORKDIR /source/console
+RUN GPROXY_BUILD_HASH=unknown pnpm build
 
 FROM rust:1-trixie AS builder
 
