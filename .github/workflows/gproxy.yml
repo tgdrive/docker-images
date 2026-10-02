@@ -1,4 +1,4 @@
-name: camofox-browser
+name: gproxy
 
 on:
   workflow_dispatch:
@@ -15,8 +15,9 @@ jobs:
   build:
     uses: ./.github/workflows/_docker-build.yml
     with:
-      image-name: tgdrive/camofox-browser
-      upstream-repo: redf0x1/camofox-browser
-      upstream-source-repo: redf0x1/camofox-browser
+      image-name: tgdrive/gproxy
+      upstream-repo: LeenHawk/gproxy
+      upstream-source-repo: LeenHawk/gproxy
+      canonical-dockerfile: gproxy/Dockerfile
       force: ${{ github.event_name == 'workflow_dispatch' && inputs.force || false }}
     secrets: inherit

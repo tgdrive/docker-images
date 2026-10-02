@@ -17,11 +17,11 @@ RUN set -eux; \
     apk add --no-cache --virtual .build-deps \
       bash \
       build-base \
-      clang19 \
-      clang19-dev \
+      clang22 \
+      clang22-dev \
       curl \
       git \
-      llvm19 \
+      llvm22 \
       make \
       cargo \
       rust \
