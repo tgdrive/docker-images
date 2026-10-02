@@ -23,7 +23,10 @@ WORKDIR /workspace
 COPY . .
 COPY --from=console /source/console/dist/ crates/gproxy-host-axum/assets/web/
 ENV RUSTFLAGS="-C target-feature=+crt-static"
-RUN cargo build --locked --release --package gproxy --bin gproxy --features postgres
+RUN native_target="$(rustc -vV | sed -n 's/^host: //p')" \
+    && cargo build --locked --release --package gproxy --bin gproxy \
+         --features postgres --target "$native_target" \
+    && cp "target/$native_target/release/gproxy" /workspace/gproxy
 
 FROM alpine:latest
 
@@ -32,7 +35,7 @@ RUN apk add --no-cache ca-certificates \
     && mkdir -p /var/lib/gproxy \
     && chown gproxy:users /var/lib/gproxy
 
-COPY --from=builder /workspace/target/release/gproxy /usr/local/bin/gproxy
+COPY --from=builder /workspace/gproxy /usr/local/bin/gproxy
 
 USER gproxy
 EXPOSE 8787
