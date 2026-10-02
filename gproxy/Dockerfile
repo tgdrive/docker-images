@@ -1,5 +1,7 @@
 FROM node:lts-trixie-slim AS console
 
+WORKDIR /source
+COPY Cargo.toml ./
 WORKDIR /source/console
 RUN corepack enable
 COPY console/package.json console/pnpm-lock.yaml ./
