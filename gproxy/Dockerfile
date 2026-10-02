@@ -1,5 +1,6 @@
-FROM node:lts-trixie-slim AS console
+FROM public.ecr.aws/docker/library/node:lts-alpine AS console
 
+ARG GPROXY_BUILD_HASH=unknown
 WORKDIR /source
 COPY Cargo.toml ./
 WORKDIR /source/console
@@ -9,28 +10,35 @@ RUN pnpm install --frozen-lockfile
 WORKDIR /source
 COPY . .
 WORKDIR /source/console
-RUN GPROXY_BUILD_HASH=unknown pnpm build
+RUN GPROXY_BUILD_HASH="$GPROXY_BUILD_HASH" pnpm build
 
-FROM rust:1-trixie AS builder
+# Native musl toolchain from upstream's deploy/container/Dockerfile.musl.
+FROM alpine:edge AS builder
 
-WORKDIR /source
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends clang cmake libclang-dev \
-    && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache build-base cargo clang22 clang22-dev cmake git go \
+        linux-headers perl pkgconf \
+    && ln -s /usr/bin/clang-22 /usr/local/bin/clang
+
+WORKDIR /workspace
 COPY . .
 COPY --from=console /source/console/dist/ crates/gproxy-host-axum/assets/web/
+ENV RUSTFLAGS="-C target-feature=+crt-static"
 RUN cargo build --locked --release --package gproxy --bin gproxy --features postgres
 
-FROM gcr.io/distroless/cc-debian13
+FROM alpine:latest
 
-WORKDIR /app
-COPY --from=builder /source/target/release/gproxy /usr/local/bin/gproxy
+RUN apk add --no-cache ca-certificates \
+    && adduser -S -D -H -u 1000 -h /var/lib/gproxy -G users gproxy \
+    && mkdir -p /var/lib/gproxy \
+    && chown gproxy:users /var/lib/gproxy
 
-USER 65532:65532
+COPY --from=builder /workspace/target/release/gproxy /usr/local/bin/gproxy
+
+USER gproxy
 EXPOSE 8787
 ENV GPROXY_HOST=0.0.0.0 \
     GPROXY_PORT=8787 \
-    GPROXY_DATA_DIR=/app/data \
+    GPROXY_DATA_DIR=/var/lib/gproxy \
     GPROXY_PERSISTENCE=postgres
-
+STOPSIGNAL SIGTERM
 ENTRYPOINT ["/usr/local/bin/gproxy"]
