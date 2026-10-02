@@ -10,17 +10,13 @@
 
 - [cloudflare-dns](https://github.com/caddy-dns/cloudflare)
 
-- [caddy-tailscale](https://github.com/tailscale/caddy-tailscale)
+- [varc](https://github.com/tgdrive/varc)
 
-- [varc](https://github.com/tgdrive/varc), built with its optional libvips image transformation support
-
-The image is built directly from static libvips and its required native dependencies in an isolated builder stage. Jemalloc is linked statically and used by libvips and other native CGO code to reduce memory fragmentation; Go's own heap continues to use the Go runtime allocator. The final Caddy binary is fully static, so no jemalloc runtime package is needed. Override the source versions when needed:
+The image uses the standard Caddy builder. Override the Caddy version when needed:
 
 ```sh
 docker build \
-  --build-arg VIPS_VERSION=8.18.4 \
-  --build-arg LIBEXIF_VERSION=0.6.26 \
-  --build-arg TIFF_VERSION=4.7.2 \
+  --build-arg CADDY_VERSION=latest \
   ./caddy
 ```
 
