@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 FROM public.ecr.aws/docker/library/node:lts-alpine AS console
 
 ARG GPROXY_BUILD_HASH=unknown
@@ -21,6 +22,32 @@ RUN apk add --no-cache build-base cargo clang22 clang22-dev cmake git go \
 
 WORKDIR /workspace
 COPY . .
+RUN <<'EOF'
+git apply - <<'PATCH'
+diff --git a/crates/gproxy-protocol/src/wire/openai/responses/input.rs b/crates/gproxy-protocol/src/wire/openai/responses/input.rs
+--- a/crates/gproxy-protocol/src/wire/openai/responses/input.rs
++++ b/crates/gproxy-protocol/src/wire/openai/responses/input.rs
+@@ -124,6 +124,7 @@ pub struct ResponseInputText {
+ pub struct ResponseInputImage {
+     #[serde(rename = "type")]
+     pub type_: ResponseInputImageType,
++    #[serde(default = "default_image_detail")]
+     pub detail: ImageDetail,
+     #[serde(
+         default,
+@@ -147,6 +148,10 @@ pub struct ResponseInputImage {
+     pub rest: Rest,
+ }
+ 
++fn default_image_detail() -> ImageDetail {
++    ImageDetail::Auto
++}
++
+ #[derive(
+     Debug, Clone, PartialEq, Eq, Serialize, Deserialize, gproxy_protocol_macros::WireBuilder,
+ )]
+PATCH
+EOF
 COPY --from=console /source/console/dist/ crates/gproxy-host-axum/assets/web/
 ENV RUSTFLAGS="-C target-feature=+crt-static"
 RUN native_target="$(rustc -vV | sed -n 's/^host: //p')" \
