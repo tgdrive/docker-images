@@ -2,22 +2,59 @@ name: gproxy
 
 on:
   workflow_dispatch:
-    inputs:
-      force:
-        description: 'Force build even if version exists'
-        required: false
-        type: boolean
-        default: false
   schedule:
-    - cron: '0 0 * * 1'
+    - cron: '0 0 * * *'
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: gproxy-publish
+  cancel-in-progress: false
 
 jobs:
-  build:
-    uses: ./.github/workflows/_docker-build.yml
-    with:
-      image-name: tgdrive/gproxy
-      upstream-repo: LeenHawk/gproxy
-      upstream-source-repo: LeenHawk/gproxy
-      canonical-dockerfile: gproxy/Dockerfile
-      force: ${{ github.event_name == 'workflow_dispatch' && inputs.force || false }}
-    secrets: inherit
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up crane
+        uses: imjasonh/setup-crane@31b88efe9de28ae0ffa220711af4b60be9435f6e # v0.4
+        with:
+          version: v0.22.1
+
+      - name: Publish upstream musl image with PostgreSQL default
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE: ghcr.io/leenhawk/gproxy
+          TARGET: ghcr.io/tgdrive/gproxy
+        run: |
+          set -euo pipefail
+
+          VERSION=$(gh api repos/LeenHawk/gproxy/releases/latest --jq .tag_name)
+          if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid upstream release version: $VERSION" >&2
+            exit 1
+          fi
+
+          DIGEST=$(crane digest "${SOURCE}:${VERSION}-musl")
+          INDEX=$(crane manifest "${SOURCE}@${DIGEST}")
+          # Attestations refer to the original configs, not our modified images.
+          MANIFESTS=$(jq -er '[.manifests[] | select(.platform.os == "linux")]
+            | if length == 0 then error("No Linux images found") else .[].digest end' <<< "$INDEX")
+
+          ARGS=()
+          while IFS= read -r manifest; do
+            ORIGINAL="${SOURCE}@${manifest}"
+            MODIFIED=$(crane mutate "$ORIGINAL" \
+              --env GPROXY_PERSISTENCE=postgres --repo "$TARGET")
+            # Verify that only the persistence default changed before tagging latest.
+            diff \
+              <(crane config "$ORIGINAL" | jq -S '.config.Env |= map(
+                if startswith("GPROXY_PERSISTENCE=") then "GPROXY_PERSISTENCE=postgres" else . end)') \
+              <(crane config "$MODIFIED" | jq -S .)
+            ARGS+=(--manifest "$MODIFIED")
+          done <<< "$MANIFESTS"
+
+          crane index append "${ARGS[@]}" --tag "${TARGET}:latest"
+          echo "Published ${SOURCE}:${VERSION}-musl as ${TARGET}:latest with GPROXY_PERSISTENCE=postgres" \
+            >> "$GITHUB_STEP_SUMMARY"
