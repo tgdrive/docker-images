@@ -1,0 +1,99 @@
+name: camofox
+
+on:
+  workflow_dispatch:
+    inputs:
+      fork-revision:
+        description: Full commit SHA published in tgdrive/mcp-camoufox
+        required: true
+        default: d61d049802df0146da2f263b0690012bc80b24b8
+        type: string
+      browser-version:
+        description: Camoufox version
+        default: '159.0'
+        type: string
+      browser-release:
+        description: Camoufox release
+        default: beta.43
+        type: string
+  push:
+    paths:
+      - camofox/**
+      - .github/workflows/camofox.yml
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: camofox-publish
+  cancel-in-progress: false
+
+env:
+  BROWSER_VERSION: ${{ inputs.browser-version || '159.0' }}
+  BROWSER_RELEASE: ${{ inputs.browser-release || 'beta.43' }}
+  FORK_REVISION: ${{ inputs.fork-revision || 'd61d049802df0146da2f263b0690012bc80b24b8' }}
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Require a pinned fork commit
+        run: |
+          if ! [[ "$FORK_REVISION" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Set fork-revision to a published tgdrive/mcp-camoufox commit" >&2
+            exit 1
+          fi
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: camofox/Dockerfile
+          platforms: linux/${{ matrix.arch }}
+          load: true
+          tags: camofox:test
+          build-args: |
+            CAMOFOX_REVISION=${{ env.FORK_REVISION }}
+            CAMOUFOX_VERSION=${{ env.BROWSER_VERSION }}
+            CAMOUFOX_RELEASE=${{ env.BROWSER_RELEASE }}
+      - name: Verify Linux input geometry without real mouse input
+        run: docker run --rm --entrypoint bun camofox:test /app/input-geometry.test.ts
+      - name: Verify Bun-only MCP, real browser and native HTTP client
+        run: |
+          docker run --rm --shm-size=1g \
+            -e EXPECTED_VERSION="$BROWSER_VERSION" -e EXPECTED_RELEASE="$BROWSER_RELEASE" \
+            --entrypoint bun camofox:test /app/smoke.ts
+      - name: Push tested image
+        run: |
+          docker tag camofox:test "ghcr.io/tgdrive/mcp-camoufox:${BROWSER_VERSION}-${BROWSER_RELEASE}-${{ matrix.arch }}"
+          docker push "ghcr.io/tgdrive/mcp-camoufox:${BROWSER_VERSION}-${BROWSER_RELEASE}-${{ matrix.arch }}"
+  manifest:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - run: |
+          docker buildx imagetools create \
+            -t "ghcr.io/tgdrive/mcp-camoufox:${BROWSER_VERSION}-${BROWSER_RELEASE}" \
+            -t ghcr.io/tgdrive/mcp-camoufox:latest \
+            "ghcr.io/tgdrive/mcp-camoufox:${BROWSER_VERSION}-${BROWSER_RELEASE}-amd64" \
+            "ghcr.io/tgdrive/mcp-camoufox:${BROWSER_VERSION}-${BROWSER_RELEASE}-arm64"
