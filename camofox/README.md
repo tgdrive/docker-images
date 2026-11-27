@@ -2,7 +2,7 @@
 
 Builds the maintained [tgdrive/mcp-camoufox](https://github.com/tgdrive/mcp-camoufox)
 fork pinned to `d61d049802df0146da2f263b0690012bc80b24b8`. There are no Docker-only source patches.
-The image name is `ghcr.io/tgdrive/mcp-camoufox`.
+The image name remains `ghcr.io/tgdrive/camofox-browser`.
 
 ```sh
 docker build --build-arg TARGETARCH=arm64 \

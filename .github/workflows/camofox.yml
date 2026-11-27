@@ -79,8 +79,8 @@ jobs:
             --entrypoint bun camofox:test /app/smoke.ts
       - name: Push tested image
         run: |
-          docker tag camofox:test "ghcr.io/tgdrive/mcp-camoufox:${BROWSER_VERSION}-${BROWSER_RELEASE}-${{ matrix.arch }}"
-          docker push "ghcr.io/tgdrive/mcp-camoufox:${BROWSER_VERSION}-${BROWSER_RELEASE}-${{ matrix.arch }}"
+          docker tag camofox:test "ghcr.io/tgdrive/camofox-browser:${BROWSER_VERSION}-${BROWSER_RELEASE}-${{ matrix.arch }}"
+          docker push "ghcr.io/tgdrive/camofox-browser:${BROWSER_VERSION}-${BROWSER_RELEASE}-${{ matrix.arch }}"
   manifest:
     needs: build
     runs-on: ubuntu-latest
@@ -93,7 +93,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - run: |
           docker buildx imagetools create \
-            -t "ghcr.io/tgdrive/mcp-camoufox:${BROWSER_VERSION}-${BROWSER_RELEASE}" \
-            -t ghcr.io/tgdrive/mcp-camoufox:latest \
-            "ghcr.io/tgdrive/mcp-camoufox:${BROWSER_VERSION}-${BROWSER_RELEASE}-amd64" \
-            "ghcr.io/tgdrive/mcp-camoufox:${BROWSER_VERSION}-${BROWSER_RELEASE}-arm64"
+            -t "ghcr.io/tgdrive/camofox-browser:${BROWSER_VERSION}-${BROWSER_RELEASE}" \
+            -t ghcr.io/tgdrive/camofox-browser:latest \
+            "ghcr.io/tgdrive/camofox-browser:${BROWSER_VERSION}-${BROWSER_RELEASE}-amd64" \
+            "ghcr.io/tgdrive/camofox-browser:${BROWSER_VERSION}-${BROWSER_RELEASE}-arm64"
