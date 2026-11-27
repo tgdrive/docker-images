@@ -6,7 +6,7 @@ on:
       fork-revision:
         description: Full commit SHA published in tgdrive/mcp-camoufox
         required: true
-        default: d61d049802df0146da2f263b0690012bc80b24b8
+        default: 2cc9ae76bb6eb760b96cddb75a36b69174f7691e
         type: string
       browser-version:
         description: Camoufox version
@@ -32,7 +32,7 @@ concurrency:
 env:
   BROWSER_VERSION: ${{ inputs.browser-version || '159.0' }}
   BROWSER_RELEASE: ${{ inputs.browser-release || 'beta.43' }}
-  FORK_REVISION: ${{ inputs.fork-revision || 'd61d049802df0146da2f263b0690012bc80b24b8' }}
+  FORK_REVISION: ${{ inputs.fork-revision || '2cc9ae76bb6eb760b96cddb75a36b69174f7691e' }}
 
 jobs:
   build:
