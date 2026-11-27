@@ -31,7 +31,7 @@ RUN curl --fail --location --retry 3 -o /opt/camoufox-cache/camoufox/GeoLite2-Ci
 
 FROM docker.io/library/debian:trixie-slim AS dependencies
 COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
-ARG CAMOFOX_REVISION=2cc9ae76bb6eb760b96cddb75a36b69174f7691e
+ARG CAMOFOX_REVISION=f66e77727dc478c9d8aadab6be2c49129f345d52
 WORKDIR /app
 RUN test -n "$CAMOFOX_REVISION" \
     && apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
@@ -51,7 +51,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     && bun pm cache rm
 
 FROM docker.io/library/debian:trixie-slim
-ARG CAMOFOX_REVISION=2cc9ae76bb6eb760b96cddb75a36b69174f7691e
+ARG CAMOFOX_REVISION=f66e77727dc478c9d8aadab6be2c49129f345d52
 ARG CAMOUFOX_VERSION=159.0
 ARG CAMOUFOX_RELEASE=beta.43
 COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
